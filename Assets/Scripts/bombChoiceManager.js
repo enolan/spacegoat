@@ -4,16 +4,16 @@ var button1 : GameObject;
 var button2 : GameObject;
 var button3 : GameObject;
 
+var buttons = []; // Initialized in Start() because reasons.
+
 static var gameResources = ["goats", "oxygen", "water", "space dust"];
 
 var bombQueue = [];
 
-// Bomb.bombType table
-var DEAL_DAMAGE = 0;
-var HALF_ALL_RESOURCES = 1;
-var INCREASE_DELAYS = 2;
-var DECREASE_DELAYS = 3;
-var INCREASE_DAMAGE = 4;
+var currentPhase : int;
+
+static var CHOICE_PHASE = 0;
+static var RESOLVE_BOMBS_PHASE = 1;
 
 public class Bomb {
 	public var resource : System.String;
@@ -82,8 +82,35 @@ public class Bomb {
 }
 
 function Start () {
+	buttons = [button1, button2, button3];
+	currentPhase = CHOICE_PHASE;
+	phaseTransition();
+}
+
+function phaseTransition() {
+	switch (currentPhase) {
+		case CHOICE_PHASE:
+			// hide the results
+			for (var b : GameObject in buttons) {
+				b.SetActive(true);
+				setupButtons();
+			}
+			break;
+		case RESOLVE_BOMBS_PHASE:
+			for (var b : GameObject in buttons) {
+				b.SetActive(false);
+			}
+			// show results
+			break;
+		default:
+			Debug.Log("Invalid phase!!!!");
+			break;
+	}
+}
+
+function setupButtons(){
 	var choices = new System.Collections.ArrayList();
-	for (var b in [button1, button2, button3]) {
+	for (var b : GameObject in buttons) {
 		var newChoice = new Bomb();
 		choices.Add(newChoice);
 		b.GetComponentInChildren(UI.Text).text = newChoice.ToString();

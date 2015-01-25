@@ -18,7 +18,8 @@ public class MenuEvents : MonoBehaviour
 
     public void exitApplication()
     {
-        exitApplication();
+		Debug.Log("exitApplication()");
+		Application.Quit();
     }
 
     public void loadLevel(string levelName)

@@ -1,13 +1,24 @@
-﻿#pragma strict
+﻿//#pragma strict
+
+@script RequireComponent(AudioSource)
 
 var button1 : GameObject;
 var button2 : GameObject;
 var button3 : GameObject;
 var resultsButton : GameObject;
 
+//Random value ranges
+var delaysLowRange : int;					//Set random delay low range
+var delaysHighRange : int;					//Set random delay high range
+var damageLowRange : int;					//Set random damage low range
+var damageHighRange : int;					//Set random damage high range
+
+
+var buttonChoices = new System.Collections.ArrayList();
+
 var buttons = []; // Initialized in Start() because reasons.
 
-static var gameResources = ["goats", "chicken", "food", "stardust"];
+static var gameResources = ["goat", "chicken", "food", "stardust"];
 
 var bombQueue = new System.Collections.ArrayList();
 
@@ -16,11 +27,17 @@ var currentPhase : int;
 static var CHOICE_PHASE = 0;
 static var RESOLVE_BOMBS_PHASE = 1;
 
-public class Bomb {
-	public var resource : System.String;
-	public var delay : int;
-	public var damage : int;
-	public var bombType: int; // see table above
+var boom : AudioClip;
+var safe : AudioClip;
+
+private var source : AudioSource;
+
+public class Bomb 
+{
+	var resource : System.String;
+	var delay : int;
+	var damage : int;
+	var bombType: int; // see table above
 
 	// Bomb.bombType table
 	static var DEAL_DAMAGE = 0;
@@ -28,16 +45,30 @@ public class Bomb {
 	static var INCREASE_DELAYS = 2;
 	static var DECREASE_DELAYS = 3;
 	static var INCREASE_DAMAGE = 4;
+
+	//Mulitpliers
+	private var foodMultiplier = 0;
+	private var goatMultiplier = 0;
+	private var chickenMultiplier = 0;
+	private var stardustMultiplier = 0;
+
 	
-	function Bomb() {
+
+	function Bomb() 
+	{
 		randomize();
-	};
+	}
 	
-	function randomize() {
-		if (Random.value > 0.75) {
+	function randomize() 
+	{
+		if (Random.value < 0.75)  // Original (Randome.value > 0.75)
+		{
 			bombType = DEAL_DAMAGE;
-		} else {
-			switch (Random.Range(0,4)) {
+		} 
+		else 
+		{
+			switch (Random.Range(0,4))
+			{
 				case 0:
 					bombType = HALF_ALL_RESOURCES;
 					break;
@@ -49,22 +80,52 @@ public class Bomb {
 					break;
 				case 3:
 					bombType = INCREASE_DAMAGE;
+					
 					break;
 			}
 		}
-		damage = Random.Range(1,4); //Random.Range is weird. This is 1-3 inclusive.
-		resource = bombChoiceManager.gameResources[Random.Range(0, bombChoiceManager.gameResources.Length)];
-		delay = Random.Range(1,5);
+		damage = Random.Range(2, 5);  //Random.Range is weird. This is 1-3 inclusive.
+		resource = bombChoiceManager.gameResources[Random.Range(1, bombChoiceManager.gameResources.Length)]; //Originally 0
+		delay = Random.Range(2, 7);  //Originally set to (1, 5)
 	}
 
-	function ToString() {
+	function ToString() 
+	{
 		var ret : String;
-		switch (bombType) {
+		switch (bombType) 
+		{
 			case DEAL_DAMAGE:
+					switch (resource)
+					{
+						case "chicken":
+							damage = chickenMultiplier + damage;
+							chickenMultiplier = 0;
+							break;
+
+						case "food":
+							damage += foodMultiplier;
+							foodMultiplier = 0;
+							break;
+
+						case "goats":
+							damage += goatMultiplier;
+							goatMultiplier = 0;
+							break;
+
+						case "stardust":
+							damage += stardustMultiplier;
+							stardustMultiplier = 0;
+							break;
+
+						default:
+							Debug.Log("Resource not found.  Check switch (resource) in ToString() function.");
+							break;
+						}
+				
 				ret = "Deal " + damage + " to " + resource + " in " + delay + " turns";
 				break;
 			case HALF_ALL_RESOURCES:
-				ret = "Half all resources in " + delay + " turns";
+				ret = "Half all the victim's resources in " + delay + " turns";
 				break;
 			case INCREASE_DELAYS:
 				ret = "Increase all " + resource + " bomb delays by " + damage;
@@ -82,14 +143,16 @@ public class Bomb {
 	}
 	
 	// Like ToString, but for the victim so we don't print how many turns until it goes off.
-	function ToStringEffect() {
+	function ToStringEffect() 
+	{
 		var ret = "";
-		switch (bombType) {
+		switch (bombType) 
+		{
 			case DEAL_DAMAGE:
-				ret = "Lose " + damage + " " + resource + "s";
+				ret = "You lose " + damage + " " + resource + "(s)";
 				break;
 			case HALF_ALL_RESOURCES:
-				ret = "Lose half your " + resource + "s";
+				ret = "You lose half of all of your resources"; // + resource + "(s)";
 				break;
 			default:
 				ret = "Invalid bombType in ToStringEffect()!";
@@ -98,116 +161,166 @@ public class Bomb {
 		}
 		return ret;
 	}
-}
+} //End class
 
-function Start () {
+function Start () 
+{
 	buttons = [button1, button2, button3];
 	currentPhase = CHOICE_PHASE;
 	phaseTransition();
 }
 
-function phaseTransition() {
-	switch (currentPhase) {
+function phaseTransition() 
+{
+	var played = false;
+	var explosions = "";
+			
+	var newBombQueue = new System.Collections.ArrayList();
+	resultsButton.GetComponentInChildren(UI.Text).text = "Be Patient!!!  Checking for bombs...";
+	switch (currentPhase) 
+	{
 		case CHOICE_PHASE:
 			resultsButton.transform.localScale = Vector3(0,0,0);
-			for (var b : GameObject in buttons) {
+			for (var b : GameObject in buttons) 
+			{
 				b.transform.localScale = Vector3(1,1,1);
 				setupButtons();
 			}
-			break;
+	break;
+
 		case RESOLVE_BOMBS_PHASE:
-			for (var b : GameObject in buttons) {
+			for (var b : GameObject in buttons) 
+{
 				b.transform.localScale = Vector3(0,0,0);
-			}
+}
 			resultsButton.transform.localScale = Vector3(1,1,1);
 			
-			var explosions = "";
-			
-			var newBombQueue = new System.Collections.ArrayList();
-
-			for (var b : Bomb in bombQueue) {
+			for (var b : Bomb in bombQueue) 
+{
 				b.delay--;
-				if (b.delay <= 0) {
-					explosions = explosions + b.ToStringEffect() + "\n";
-				} else {
+				if (b.delay <= 0) 
+{
+					
+					audio.PlayOneShot (boom);
+					played = true;
+					yield WaitForSeconds(2);
+					explosions = explosions + b.ToStringEffect() + "\n" + "\n" ;
+
+} 
+else 
+{
 					newBombQueue.Add(b);
-				}
-			}
+					
+}
+}
 			
 			bombQueue = newBombQueue;
 			
-			if (explosions == "") {
-				explosions = "No bombs this turn.";
-			}
+			if (explosions == "") 
+{
+				
+				if(!played)
+{						
+					audio.PlayOneShot (safe);
+}
+				yield WaitForSeconds(2);
+				explosions = "You're safe this round....";
+}
 			resultsButton.GetComponentInChildren(UI.Text).text = explosions;
 			break;
+		
 		default:
 			Debug.Log("Invalid phase!!!!");
 			break;
 	}
 }
 
-var buttonChoices = new System.Collections.ArrayList();
-
-function setupButtons(){
+function setupButtons()
+{
 	buttonChoices.Clear();
-	for (var b : GameObject in buttons) {
+	for (var b : GameObject in buttons) 
+	{
 		var newChoice = new Bomb();
 		buttonChoices.Add(newChoice);
 		b.GetComponentInChildren(UI.Text).text = newChoice.ToString();
 	}
 }
 
-function dumpBombQueue() {
+function dumpBombQueue() 
+{
 	var outString = "";
-	for (var bomb in bombQueue) {
+	for (var bomb in bombQueue) 
+	{
 		outString = outString + bomb.ToString() + " ";
 	}
-	Debug.Log(outString);
+	
+	//Debug.Log(outString);
 }
 
-function bombChoiceButton1Pressed() {
+function bombChoiceButton1Pressed() 
+{
 	addNewBomb(buttonChoices[0]);
 	dumpBombQueue();
 }
 
-function bombChoiceButton2Pressed() {
+function bombChoiceButton2Pressed() 
+{
 	addNewBomb(buttonChoices[1]);
 	dumpBombQueue();
 }
 
-function bombChoiceButton3Pressed() {
+function bombChoiceButton3Pressed() 
+{
 	addNewBomb(buttonChoices[2]);
 	dumpBombQueue();
 }
 
-function addNewBomb(b : Bomb) {
-	if (b.bombType == Bomb.DEAL_DAMAGE || b.bombType == Bomb.HALF_ALL_RESOURCES) {
+function addNewBomb(b : Bomb) 
+{
+	if (b.bombType == Bomb.DEAL_DAMAGE || b.bombType == Bomb.HALF_ALL_RESOURCES) 
+	{
 		bombQueue.Add(b);
-	} else if (b.bombType == Bomb.INCREASE_DELAYS || b.bombType == Bomb.DECREASE_DELAYS || b.bombType == Bomb.INCREASE_DAMAGE) {
-		for (var otherBomb : Bomb in bombQueue) {
-			if (b.bombType == Bomb.INCREASE_DELAYS) {
-				if (otherBomb.resource == b.resource) {
+	} 
+	else if (b.bombType == Bomb.INCREASE_DELAYS || b.bombType == Bomb.DECREASE_DELAYS || b.bombType == Bomb.INCREASE_DAMAGE) 
+	{
+		print("Bomb increase, decrease and damage");
+		for (var otherBomb : Bomb in bombQueue) 
+		{
+			if (b.bombType == Bomb.INCREASE_DELAYS) 
+		{
+			print("Increase delay step 1");
+				if (otherBomb.resource == b.resource) 
+				{
 					otherBomb.delay += b.damage;
 				}
-			} else if (b.bombType == Bomb.DECREASE_DELAYS) {
-				if (otherBomb.resource == b.resource) {
+			} 
+			else if (b.bombType == Bomb.DECREASE_DELAYS) 
+			{
+				if (otherBomb.resource == b.resource) 
+				{
 					otherBomb.delay -= b.damage;
 				}
-			} else if (b.bombType == Bomb.INCREASE_DAMAGE) {
-				if (otherBomb.resource == b.resource) {
+			} 
+			else if (b.bombType == Bomb.INCREASE_DAMAGE) 
+			{
+				if (otherBomb.resource == b.resource) 
+				{
 					otherBomb.damage += b.damage;
 				}
 			}
 		}
-	} else {
+	} 
+	else 
+	{
 		Debug.Log("Invalid bombType!");
 	}
 	currentPhase = RESOLVE_BOMBS_PHASE;
 	phaseTransition();
 }
 
-function resultsButtonPressed() {
+
+function resultsButtonPressed() 
+{
 	currentPhase = CHOICE_PHASE;
 	phaseTransition();
 }

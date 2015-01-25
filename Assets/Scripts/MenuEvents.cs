@@ -20,4 +20,11 @@ public class MenuEvents : MonoBehaviour
     {
         exitApplication();
     }
+
+    public void loadLevel(string levelName)
+    {
+        Application.LoadLevel(levelName);
+    }
+
+   
 }

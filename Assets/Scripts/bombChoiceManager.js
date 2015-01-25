@@ -161,7 +161,6 @@ function phaseTransition()
 			
 			for (var b : Bomb in bombQueue) 
 			{
-				b.delay--;
 				if (b.delay <= 0) 
 				{	
 					audio.PlayOneShot (boom);
@@ -171,6 +170,7 @@ function phaseTransition()
 				}
 				else
 				{
+					b.delay--;
 					newBombQueue.Add(b);	
 				}
 			}

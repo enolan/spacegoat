@@ -3,12 +3,13 @@
 var button1 : GameObject;
 var button2 : GameObject;
 var button3 : GameObject;
+var resultsButton : GameObject;
 
 var buttons = []; // Initialized in Start() because reasons.
 
-static var gameResources = ["goats", "oxygen", "water", "space dust"];
+static var gameResources = ["goats", "chicken", "food", "stardust"];
 
-var bombQueue = [];
+var bombQueue = new System.Collections.ArrayList();
 
 var currentPhase : int;
 
@@ -79,6 +80,24 @@ public class Bomb {
 		}
 		return ret;
 	}
+	
+	// Like ToString, but for the victim so we don't print how many turns until it goes off.
+	function ToStringEffect() {
+		var ret = "";
+		switch (bombType) {
+			case DEAL_DAMAGE:
+				ret = "Lose " + damage + " " + resource + "s";
+				break;
+			case HALF_ALL_RESOURCES:
+				ret = "Lose half your " + resource + "s";
+				break;
+			default:
+				ret = "Invalid bombType in ToStringEffect()!";
+				Debug.Log(ret);
+				break;
+		}
+		return ret;
+	}
 }
 
 function Start () {
@@ -90,17 +109,37 @@ function Start () {
 function phaseTransition() {
 	switch (currentPhase) {
 		case CHOICE_PHASE:
-			// hide the results
+			resultsButton.transform.localScale = Vector3(0,0,0);
 			for (var b : GameObject in buttons) {
-				b.SetActive(true);
+				b.transform.localScale = Vector3(1,1,1);
 				setupButtons();
 			}
 			break;
 		case RESOLVE_BOMBS_PHASE:
 			for (var b : GameObject in buttons) {
-				b.SetActive(false);
+				b.transform.localScale = Vector3(0,0,0);
 			}
-			// show results
+			resultsButton.transform.localScale = Vector3(1,1,1);
+			
+			var explosions = "";
+			
+			var newBombQueue = new System.Collections.ArrayList();
+
+			for (var b : Bomb in bombQueue) {
+				b.delay--;
+				if (b.delay <= 0) {
+					explosions = explosions + b.ToStringEffect() + "\n";
+				} else {
+					newBombQueue.Add(b);
+				}
+			}
+			
+			bombQueue = newBombQueue;
+			
+			if (explosions == "") {
+				explosions = "No bombs this turn.";
+			}
+			resultsButton.GetComponentInChildren(UI.Text).text = explosions;
 			break;
 		default:
 			Debug.Log("Invalid phase!!!!");
@@ -108,13 +147,69 @@ function phaseTransition() {
 	}
 }
 
+var buttonChoices = new System.Collections.ArrayList();
+
 function setupButtons(){
-	var choices = new System.Collections.ArrayList();
+	buttonChoices.Clear();
 	for (var b : GameObject in buttons) {
 		var newChoice = new Bomb();
-		choices.Add(newChoice);
+		buttonChoices.Add(newChoice);
 		b.GetComponentInChildren(UI.Text).text = newChoice.ToString();
 	}
+}
+
+function dumpBombQueue() {
+	var outString = "";
+	for (var bomb in bombQueue) {
+		outString = outString + bomb.ToString() + " ";
+	}
+	Debug.Log(outString);
+}
+
+function bombChoiceButton1Pressed() {
+	addNewBomb(buttonChoices[0]);
+	dumpBombQueue();
+}
+
+function bombChoiceButton2Pressed() {
+	addNewBomb(buttonChoices[1]);
+	dumpBombQueue();
+}
+
+function bombChoiceButton3Pressed() {
+	addNewBomb(buttonChoices[2]);
+	dumpBombQueue();
+}
+
+function addNewBomb(b : Bomb) {
+	if (b.bombType == Bomb.DEAL_DAMAGE || b.bombType == Bomb.HALF_ALL_RESOURCES) {
+		bombQueue.Add(b);
+	} else if (b.bombType == Bomb.INCREASE_DELAYS || b.bombType == Bomb.DECREASE_DELAYS || b.bombType == Bomb.INCREASE_DAMAGE) {
+		for (var otherBomb : Bomb in bombQueue) {
+			if (b.bombType == Bomb.INCREASE_DELAYS) {
+				if (otherBomb.resource == b.resource) {
+					otherBomb.delay += b.damage;
+				}
+			} else if (b.bombType == Bomb.DECREASE_DELAYS) {
+				if (otherBomb.resource == b.resource) {
+					otherBomb.delay -= b.damage;
+				}
+			} else if (b.bombType == Bomb.INCREASE_DAMAGE) {
+				if (otherBomb.resource == b.resource) {
+					otherBomb.damage += b.damage;
+				}
+			}
+		}
+	} else {
+		Debug.Log("Invalid bombType!");
+	}
+	currentPhase = RESOLVE_BOMBS_PHASE;
+	phaseTransition();
+}
+
+function resultsButtonPressed() {
+	currentPhase = CHOICE_PHASE;
+	phaseTransition();
 }
 
 function Update () {
